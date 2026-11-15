@@ -590,6 +590,103 @@ class TestInvalid(util.TestCase):
         with self.assertRaises(TypeError):
             sv.filter('div', "not a tag", flags=flags)
 
+    def test_excessive_selectors(self):
+        """Test excessive selectors."""
+
+        # Build a long selector string: "a,a,a,...,a"
+        count = 10000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(selector)
+
+    def test_selector_limit_boundary(self):
+        """Test that the selector limit is only exceeded past the limit."""
+
+        limit = sv.cp.SELECTOR_LIMIT
+
+        # Exactly at the limit is allowed
+        selector = ",".join("a" for _ in range(limit))
+        self.assertEqual(len(sv.compile(selector).selectors), limit)
+
+        # One past the limit is rejected
+        selector = ",".join("a" for _ in range(limit + 1))
+        with self.assertRaises(ValueError):
+            sv.compile(selector)
+
+    def test_excessive_nested_selectors(self):
+        """Test excessive selectors nested in pseudo-classes."""
+
+        count = 10000
+        selector = ",".join("a" for _ in range(count))
+
+        with self.assertRaises(ValueError):
+            sv.compile(':is({})'.format(selector))
+
+        with self.assertRaises(ValueError):
+            sv.compile(':not({})'.format(selector))
+
+        with self.assertRaises(ValueError):
+            sv.compile(':nth-child(2n of {})'.format(selector))
+
+    def test_excessive_group_selectors(self):
+        """Test excessive selectors in `:is()` and `:where()`."""
+
+        count = 10000
+        selector = ':is({})'.format("," * count)
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(selector)
+
+        selector = ':where({})'.format("," * count)
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(selector)
+
+    def test_excessive_has_empty_slots(self):
+        """Test that empty slots in `:has()` are rejected instead of accumulated."""
+
+        count = 10000
+        selector = ':has({}a)'.format("," * count)
+
+        # Compile the selector
+        with self.assertRaises(sv.SelectorSyntaxError):
+            sv.compile(selector)
+
+    def test_excessive_custom_selectors(self):
+        """Test excessive custom selectors."""
+
+        # Build a long selector string: "a,a,a,...,a"
+        count = 10000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile('div:--custom', custom={':--custom': selector})
+
+    def test_excessive_custom_and_normal_selectors(self):
+        """Test excessive custom and normal selectors."""
+
+        count = 5000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(':is({}):--custom'.format(selector), custom={':--custom': selector})
+
+    def test_excessive_reused_custom_selectors(self):
+        """Test that reusing an already compiled custom selector is counted each time."""
+
+        count = 5000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(':--custom, :--custom', custom={':--custom': selector})
+
 
 class TestSyntaxErrorReporting(util.TestCase):
     """Test reporting of syntax errors."""
